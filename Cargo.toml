@@ -1,0 +1,10 @@
+[package]
+name = "kakapo-lodge-rates"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+http = "1.1.0"
+tide = "0.16.0"
+async-std = { version = "1.12.0", features = ["attributes"] }
+serde = { version = "1.0.204", features = ["derive"] }
