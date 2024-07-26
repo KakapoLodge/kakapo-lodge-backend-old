@@ -14,9 +14,7 @@ async fn main() -> tide::Result<()> {
 
     let cors = CorsMiddleware::new()
         .allow_methods("GET, POST, OPTIONS".parse::<HeaderValue>().unwrap())
-        .allow_origin(Origin::from("https://kakapolodge.github.io/"))
-        .allow_origin(Origin::from("https://www.kakapolodge.co.nz/"))
-        .allow_origin(Origin::from("https://kakapolodge.co.nz/"))
+        .allow_origin(Origin::from("*"))
         .allow_credentials(false);
     app.with(cors);
 
