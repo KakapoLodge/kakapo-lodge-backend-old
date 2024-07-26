@@ -70,13 +70,8 @@ struct RatePlanDate {
 }
 
 #[derive(Deserialize, Serialize)]
-struct LodgeRates {
-    rates: Vec<LodgeRate>,
-}
-
-#[derive(Deserialize, Serialize)]
 struct LodgeRate {
-    accommodation_type: String,
+    name: String,
     rate: u16,
     num_available: u8,
 }
@@ -86,8 +81,6 @@ const LITTLE_HOTELIER_BASE_URL: &str =
 
 async fn rates(_request: Request<()>) -> tide::Result {
     let now: DateTime<Utc> = SystemTime::now().into();
-
-    println!("got here");
 
     let todays_date = now
         .to_rfc3339()
@@ -105,13 +98,13 @@ async fn rates(_request: Request<()>) -> tide::Result {
         LITTLE_HOTELIER_BASE_URL, todays_date, todays_date
     );
 
-    println!("url: {}", url);
+    println!("url to call: {}", url);
 
     let little_hotelier_response: Vec<LittleHotelierRates> = surf::get(url).recv_json().await?;
 
     let little_hotelier_rates = little_hotelier_response.first().unwrap();
 
-    println!("got response from LH");
+    println!("got response from Little Hotelier");
 
     let lodge_rates = map_rates(little_hotelier_rates);
     let response_body = json!(lodge_rates);
@@ -120,7 +113,7 @@ async fn rates(_request: Request<()>) -> tide::Result {
     Ok(response)
 }
 
-fn map_rates(little_hotelier_rates: &LittleHotelierRates) -> LodgeRates {
+fn map_rates(little_hotelier_rates: &LittleHotelierRates) -> Vec<LodgeRate> {
     let rate_plans = &little_hotelier_rates.rate_plans;
 
     let rates = rate_plans
@@ -128,14 +121,14 @@ fn map_rates(little_hotelier_rates: &LittleHotelierRates) -> LodgeRates {
         .map(|rate_plan| map_rate_plan_to_lodge_rate(rate_plan))
         .collect();
 
-    LodgeRates { rates }
+    rates
 }
 
 fn map_rate_plan_to_lodge_rate(rate_plan: &RatePlan) -> LodgeRate {
     let rate_plan_date = rate_plan.rate_plan_dates.first().unwrap();
 
     LodgeRate {
-        accommodation_type: rate_plan.name.to_owned(),
+        name: rate_plan.name.to_owned(),
         rate: rate_plan_date.rate,
         num_available: rate_plan_date.available,
     }
