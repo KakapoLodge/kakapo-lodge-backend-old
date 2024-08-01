@@ -13,6 +13,7 @@ async fn main() -> tide::Result<()> {
 
     app.at("/hello").get(hello);
     app.at("/rates").get(rates);
+    app.at("/rates/tonight").get(tonights_rates);
 
     let cors = CorsMiddleware::new()
         .allow_methods("GET, POST, OPTIONS".parse::<HeaderValue>().unwrap())
@@ -80,6 +81,10 @@ struct LodgeRate {
 
 const LITTLE_HOTELIER_BASE_URL: &str =
     "https://apac.littlehotelier.com/api/v1/properties/kakapolodgedirect/rates.json";
+
+async fn tonights_rates(request: Request<()>) -> tide::Result {
+    rates(request).await
+}
 
 async fn rates(request: Request<()>) -> tide::Result {
     log_request_origin(&request);
