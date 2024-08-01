@@ -1,12 +1,14 @@
 use chrono::{DateTime, Utc};
 use std::time::SystemTime;
+use surf::http::headers::HeaderValues;
 use tide::http::headers::HeaderValue;
 use tide::security::{CorsMiddleware, Origin};
-use tide::Request;
+use tide::{log, Request};
 use tide::{prelude::*, Response};
 
 #[async_std::main]
 async fn main() -> tide::Result<()> {
+    log::start();
     let mut app = tide::new();
 
     app.at("/hello").get(hello);
@@ -36,6 +38,8 @@ impl Default for Query {
 }
 
 async fn hello(request: Request<()>) -> tide::Result {
+    log_request_origin(&request);
+
     let query: Query = request.query()?;
     let reply = format!("Hello, {}!", query.name);
     Ok(reply.into())
@@ -77,38 +81,42 @@ struct LodgeRate {
 const LITTLE_HOTELIER_BASE_URL: &str =
     "https://apac.littlehotelier.com/api/v1/properties/kakapolodgedirect/rates.json";
 
-async fn rates(_request: Request<()>) -> tide::Result {
-    let now: DateTime<Utc> = SystemTime::now().into();
+async fn rates(request: Request<()>) -> tide::Result {
+    log_request_origin(&request);
 
-    let todays_date = now
-        .to_rfc3339()
-        .split('T')
-        .map(|string_slice| string_slice.to_owned())
-        .collect::<Vec<_>>()
-        .first()
-        .unwrap_or(&String::from(""))
-        .to_owned();
+    let todays_date = get_todays_date_as_rfc3339_string();
+    log::info!("today's date: {}", todays_date);
 
-    println!("today's date: {}", todays_date);
-
-    let url = format!(
+    let little_hotelier_url = format!(
         "{}?start_date={}&end_date={}",
         LITTLE_HOTELIER_BASE_URL, todays_date, todays_date
     );
+    log::info!("url to call: {}", little_hotelier_url);
 
-    println!("url to call: {}", url);
-
-    let little_hotelier_response: Vec<LittleHotelierRates> = surf::get(url).recv_json().await?;
+    let little_hotelier_response: Vec<LittleHotelierRates> =
+        surf::get(little_hotelier_url).recv_json().await?;
 
     let little_hotelier_rates = little_hotelier_response.first().unwrap();
 
-    println!("got response from Little Hotelier");
+    log::info!("got response from Little Hotelier");
 
     let lodge_rates = map_rates(little_hotelier_rates);
     let response_body = json!(lodge_rates);
 
     let response = Response::builder(200).body(response_body).build();
     Ok(response)
+}
+
+fn get_todays_date_as_rfc3339_string() -> String {
+    let now: DateTime<Utc> = SystemTime::now().into();
+
+    now.to_rfc3339()
+        .split('T')
+        .map(|string_slice| string_slice.to_owned())
+        .collect::<Vec<_>>()
+        .first()
+        .unwrap_or(&String::from(""))
+        .to_owned()
 }
 
 fn map_rates(little_hotelier_rates: &LittleHotelierRates) -> Vec<LodgeRate> {
@@ -130,4 +138,10 @@ fn map_rate_plan_to_lodge_rate(rate_plan: &RatePlan) -> LodgeRate {
         rate: rate_plan_date.rate,
         num_available: rate_plan_date.available,
     }
+}
+
+fn log_request_origin(request: &Request<()>) {
+    let default_origin = HeaderValues::from_iter([]);
+    let request_origin = request.header("Origin").unwrap_or(&default_origin);
+    log::info!("Request origin: {:?}", request_origin);
 }
