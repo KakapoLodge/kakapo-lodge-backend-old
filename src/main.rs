@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
-use std::time::SystemTime;
+use chrono::Utc;
+use chrono_tz::Pacific::Auckland;
 use surf::http::headers::HeaderValues;
 use tide::http::headers::HeaderValue;
 use tide::security::{CorsMiddleware, Origin};
@@ -83,10 +83,6 @@ const LITTLE_HOTELIER_BASE_URL: &str =
     "https://apac.littlehotelier.com/api/v1/properties/kakapolodgedirect/rates.json";
 
 async fn tonights_rates(request: Request<()>) -> tide::Result {
-    rates(request).await
-}
-
-async fn rates(request: Request<()>) -> tide::Result {
     log_request_origin(&request);
 
     let todays_date = get_todays_date_as_rfc3339_string();
@@ -112,8 +108,12 @@ async fn rates(request: Request<()>) -> tide::Result {
     Ok(response)
 }
 
+async fn rates(_request: Request<()>) -> tide::Result {
+    Ok("TODO".into())
+}
+
 fn get_todays_date_as_rfc3339_string() -> String {
-    let now: DateTime<Utc> = SystemTime::now().into();
+    let now = Utc::now().with_timezone(&Auckland);
 
     now.to_rfc3339()
         .split('T')
