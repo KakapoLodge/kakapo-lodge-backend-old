@@ -110,8 +110,10 @@ async fn rates(request: Request<()>) -> tide::Result {
     let little_hotelier_response: Vec<LittleHotelierRates> =
         surf::get(little_hotelier_url).recv_json().await?;
 
+    let little_hotelier_rates = little_hotelier_response.first().unwrap();
+
     let response = Response::builder(200)
-        .body(json!(little_hotelier_response))
+        .body(json!(&little_hotelier_rates.rate_plans))
         .build();
 
     Ok(response)
