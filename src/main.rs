@@ -1,5 +1,6 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use chrono_tz::Pacific::Auckland;
+use chrono_tz::Tz;
 use surf::http::headers::HeaderValues;
 use tide::http::headers::HeaderValue;
 use tide::security::{CorsMiddleware, Origin};
@@ -27,10 +28,10 @@ async fn main() -> tide::Result<()> {
 
 #[derive(Deserialize)]
 #[serde(default)]
-struct Query {
+struct HelloQuery {
     name: String,
 }
-impl Default for Query {
+impl Default for HelloQuery {
     fn default() -> Self {
         Self {
             name: "world".to_owned(),
@@ -41,7 +42,7 @@ impl Default for Query {
 async fn hello(request: Request<()>) -> tide::Result {
     log_request_origin(&request);
 
-    let query: Query = request.query()?;
+    let query: HelloQuery = request.query()?;
     let reply = format!("Hello, {}!", query.name);
     Ok(reply.into())
 }
@@ -82,10 +83,45 @@ struct LodgeRate {
 const LITTLE_HOTELIER_BASE_URL: &str =
     "https://apac.littlehotelier.com/api/v1/properties/kakapolodgedirect/rates.json";
 
+#[derive(Deserialize)]
+#[serde(default)]
+struct RatesQuery {
+    start_date: String,
+    end_date: String,
+}
+impl Default for RatesQuery {
+    fn default() -> Self {
+        Self {
+            start_date: "".to_owned(),
+            end_date: "".to_owned(),
+        }
+    }
+}
+async fn rates(request: Request<()>) -> tide::Result {
+    log_request_origin(&request);
+
+    let query: RatesQuery = request.query()?;
+
+    let little_hotelier_url = format!(
+        "{}?start_date={}&end_date={}",
+        LITTLE_HOTELIER_BASE_URL, query.start_date, query.end_date
+    );
+
+    let little_hotelier_response: Vec<LittleHotelierRates> =
+        surf::get(little_hotelier_url).recv_json().await?;
+
+    let response = Response::builder(200)
+        .body(json!(little_hotelier_response))
+        .build();
+
+    Ok(response)
+}
+
 async fn tonights_rates(request: Request<()>) -> tide::Result {
     log_request_origin(&request);
 
-    let todays_date = get_todays_date_as_rfc3339_string();
+    let today = get_todays_date();
+    let todays_date = convert_date_to_rfc3339_string(&today);
     log::info!("today's date: {}", todays_date);
 
     let little_hotelier_url = format!(
@@ -101,21 +137,19 @@ async fn tonights_rates(request: Request<()>) -> tide::Result {
 
     log::info!("got response from Little Hotelier");
 
-    let lodge_rates = map_rates(little_hotelier_rates);
+    let lodge_rates = map_tonights_rates(little_hotelier_rates);
     let response_body = json!(lodge_rates);
 
     let response = Response::builder(200).body(response_body).build();
     Ok(response)
 }
 
-async fn rates(_request: Request<()>) -> tide::Result {
-    Ok("TODO".into())
+fn get_todays_date() -> DateTime<Tz> {
+    Utc::now().with_timezone(&Auckland)
 }
 
-fn get_todays_date_as_rfc3339_string() -> String {
-    let now = Utc::now().with_timezone(&Auckland);
-
-    now.to_rfc3339()
+fn convert_date_to_rfc3339_string(date: &DateTime<Tz>) -> String {
+    date.to_rfc3339()
         .split('T')
         .map(|string_slice| string_slice.to_owned())
         .collect::<Vec<_>>()
@@ -124,7 +158,7 @@ fn get_todays_date_as_rfc3339_string() -> String {
         .to_owned()
 }
 
-fn map_rates(little_hotelier_rates: &LittleHotelierRates) -> Vec<LodgeRate> {
+fn map_tonights_rates(little_hotelier_rates: &LittleHotelierRates) -> Vec<LodgeRate> {
     let rate_plans = &little_hotelier_rates.rate_plans;
 
     let rates = rate_plans
