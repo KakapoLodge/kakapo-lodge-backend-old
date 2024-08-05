@@ -1,6 +1,3 @@
-use chrono::{DateTime, Utc};
-use chrono_tz::Pacific::Auckland;
-use chrono_tz::Tz;
 use surf::http::headers::HeaderValues;
 use tide::http::headers::HeaderValue;
 use tide::security::{CorsMiddleware, Origin};
@@ -14,7 +11,6 @@ async fn main() -> tide::Result<()> {
 
     app.at("/hello").get(hello);
     app.at("/rates").get(rates);
-    app.at("/rates/tonight").get(tonights_rates);
 
     let cors = CorsMiddleware::new()
         .allow_methods("GET, POST, OPTIONS".parse::<HeaderValue>().unwrap())
@@ -117,68 +113,6 @@ async fn rates(request: Request<()>) -> tide::Result {
         .build();
 
     Ok(response)
-}
-
-async fn tonights_rates(request: Request<()>) -> tide::Result {
-    log_request_origin(&request);
-
-    let today = get_todays_date();
-    let todays_date = convert_date_to_rfc3339_string(&today);
-    log::info!("today's date: {}", todays_date);
-
-    let little_hotelier_url = format!(
-        "{}?start_date={}&end_date={}",
-        LITTLE_HOTELIER_BASE_URL, todays_date, todays_date
-    );
-    log::info!("url to call: {}", little_hotelier_url);
-
-    let little_hotelier_response: Vec<LittleHotelierRates> =
-        surf::get(little_hotelier_url).recv_json().await?;
-
-    let little_hotelier_rates = little_hotelier_response.first().unwrap();
-
-    log::info!("got response from Little Hotelier");
-
-    let lodge_rates = map_tonights_rates(little_hotelier_rates);
-    let response_body = json!(lodge_rates);
-
-    let response = Response::builder(200).body(response_body).build();
-    Ok(response)
-}
-
-fn get_todays_date() -> DateTime<Tz> {
-    Utc::now().with_timezone(&Auckland)
-}
-
-fn convert_date_to_rfc3339_string(date: &DateTime<Tz>) -> String {
-    date.to_rfc3339()
-        .split('T')
-        .map(|string_slice| string_slice.to_owned())
-        .collect::<Vec<_>>()
-        .first()
-        .unwrap_or(&String::from(""))
-        .to_owned()
-}
-
-fn map_tonights_rates(little_hotelier_rates: &LittleHotelierRates) -> Vec<LodgeRate> {
-    let rate_plans = &little_hotelier_rates.rate_plans;
-
-    let rates = rate_plans
-        .into_iter()
-        .map(|rate_plan| map_rate_plan_to_lodge_rate(rate_plan))
-        .collect();
-
-    rates
-}
-
-fn map_rate_plan_to_lodge_rate(rate_plan: &RatePlan) -> LodgeRate {
-    let rate_plan_date = rate_plan.rate_plan_dates.first().unwrap();
-
-    LodgeRate {
-        name: rate_plan.name.to_owned(),
-        rate: rate_plan_date.rate,
-        num_available: rate_plan_date.available,
-    }
 }
 
 fn log_request_origin(request: &Request<()>) {
